@@ -1,0 +1,8 @@
+{
+    "commentTranslate.hover.enabled": true,
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "xfacet": "cpp",
+        "*.def": "cpp"
+    }
+}

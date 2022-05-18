@@ -1,0 +1,10 @@
+# 定义虚拟机的各种配置，主要包括三个方面的配置：
+# 虚拟机的配置、SSH配置、Vagrant的一些基础配置。（Ruby语言）
+
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/groovy64" # 设置使用的box
+  config.vm.provision "shell", path: "util/quicktest.sh"  # 设置执行的shell脚本
+end

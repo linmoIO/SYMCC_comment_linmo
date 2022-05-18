@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# This file is part of SymCC.
+#
+# SymCC is free software: you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# SymCC is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# SymCC. If not, see <https://www.gnu.org/licenses/>.
+
+runtime_64bit_dir="${SYMCC_RUNTIME_DIR:-@SYM_RUNTIME_DIR@}"
+runtime_32bit_dir="${SYMCC_RUNTIME32_DIR:-@SYM_RUNTIME_32BIT_DIR@}"
+pass="${SYMCC_PASS_DIR:-@CMAKE_CURRENT_BINARY_DIR@}/libSymbolize.so"
+compiler="${SYMCC_CLANG:-@CLANG_BINARY@}"
+
+# Find out if we're cross-compiling for a 32-bit architecture
+runtime_dir="$runtime_64bit_dir"
+for arg in "$@"; do
+    if [[ $arg == "-m32" ]]; then
+        if [ -z "$runtime_32bit_dir" ]; then
+            echo "SymCC: 32-bit compilation requested but SymCC was not built with TARGET_32BIT=ON" >&2
+            exit 255
+        else
+            runtime_dir="$runtime_32bit_dir"
+            break
+        fi
+    fi
+done
+
+if [ $# -eq 0 ]; then
+    echo "Use symcc as a drop-in replacement for clang, e.g., symcc -O2 -o foo foo.c" >&2
+    exit 1
+fi
+
+exec $compiler                                  \
+     -Xclang -load -Xclang "$pass"              \
+     "$@"                                       \
+     -L"$runtime_dir"                           \
+     -lSymRuntime                               \
+     -Wl,-rpath,"$runtime_dir"                  \
+     -Qunused-arguments
