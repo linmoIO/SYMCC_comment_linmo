@@ -14,4 +14,6 @@
 
 #include "Shadow.h"
 
+// 影子内存的具体实现是通过map，键为地址指针，值存储对应的符号表达式
+// 影子内存主要映射内存中的值对应的符号表达式（包括全局变量、文件流、内存存储的值）
 std::map<uintptr_t, SymExpr *> g_shadow_pages;

@@ -24,17 +24,19 @@
 
 namespace {
 
-constexpr int kMaxFunctionArguments = 256;
+constexpr int kMaxFunctionArguments = 256;  // 符号表达式参数个数上限为256
 
 /// Global storage for function parameters and the return value.
-SymExpr g_return_value;
-std::array<SymExpr, kMaxFunctionArguments> g_function_arguments;
+SymExpr g_return_value; // 函数返回值（符号表达式）
+std::array<SymExpr, kMaxFunctionArguments> g_function_arguments;  // 符号表达式参数组（用数组存储）
 // TODO make thread-local
 
 } // namespace
 
+// 注意，此处设置的返回值只能是符号化返回值(具体值无需存储)
 void _sym_set_return_expression(SymExpr expr) { g_return_value = expr; }
 
+// 获取返回的符号表达式
 SymExpr _sym_get_return_expression(void) {
   auto *result = g_return_value;
   // TODO this is a safeguard that can eventually be removed
@@ -42,47 +44,54 @@ SymExpr _sym_get_return_expression(void) {
   return result;
 }
 
+// 设置参数表达式（根据索引index和表达式expr）
 void _sym_set_parameter_expression(uint8_t index, SymExpr expr) {
-  g_function_arguments[index] = expr;
+  g_function_arguments[index] = expr; // 直接在数组中赋值即可
 }
 
+// 获得index对应参数的表达式
 SymExpr _sym_get_parameter_expression(uint8_t index) {
   return g_function_arguments[index];
 }
 
+// 效仿memcpy，对影子内存中的符号表达式进行拷贝（相当于符号化的memcpy）
 void _sym_memcpy(uint8_t *dest, const uint8_t *src, size_t length) {
   if (isConcrete(src, length) && isConcrete(dest, length))
-    return;
+    return; // 若均为具体值，则无需处理
 
-  ReadOnlyShadow srcShadow(src, length);
-  ReadWriteShadow destShadow(dest, length);
-  std::copy(srcShadow.begin(), srcShadow.end(), destShadow.begin());
+  // 否则
+  ReadOnlyShadow srcShadow(src, length);    // 创建只读影子内存视图
+  ReadWriteShadow destShadow(dest, length); // 创建可读写影子内存视图
+  std::copy(srcShadow.begin(), srcShadow.end(), destShadow.begin());  // 进行拷贝
 }
 
+// 效仿memset，对影子内存中的符号表达式进行初始化设置
 void _sym_memset(uint8_t *memory, SymExpr value, size_t length) {
   if ((value == nullptr) && isConcrete(memory, length))
     return;
 
-  ReadWriteShadow shadow(memory, length);
-  std::fill(shadow.begin(), shadow.end(), value);
+  ReadWriteShadow shadow(memory, length);   // 创建可读写影子内存视图
+  std::fill(shadow.begin(), shadow.end(), value); // 用fill进行填写
 }
 
+// 效仿memmove，对影子内存中的符号表达式进行复制操作（注意区别memcpy）
 void _sym_memmove(uint8_t *dest, const uint8_t *src, size_t length) {
   if (isConcrete(src, length) && isConcrete(dest, length))
     return;
 
   ReadOnlyShadow srcShadow(src, length);
   ReadWriteShadow destShadow(dest, length);
-  if (dest > src)
+  if (dest > src) // 若目标内存区在源内存区之后，则采用从后往前拷贝
     std::copy_backward(srcShadow.begin(), srcShadow.end(), destShadow.end());
-  else
+  else            // 否则从前往后拷贝
     std::copy(srcShadow.begin(), srcShadow.end(), destShadow.begin());
 }
 
+// 读内存区（可区分大端还是小端法）
 SymExpr _sym_read_memory(uint8_t *addr, size_t length, bool little_endian) {
   assert(length && "Invalid query for zero-length memory region");
 
-#ifdef DEBUG_RUNTIME
+#ifdef DEBUG_RUNTIME  // 若为DEBUG，打印DEBUG信息
   std::cerr << "Reading " << length << " bytes from address " << P(addr)
             << std::endl;
   dump_known_regions();
@@ -90,22 +99,25 @@ SymExpr _sym_read_memory(uint8_t *addr, size_t length, bool little_endian) {
 
   // If the entire memory region is concrete, don't create a symbolic expression
   // at all.
+  // 若整个内存区都是具体的，直接返回，无需创建符号表达式
   if (isConcrete(addr, length))
     return nullptr;
 
-  ReadOnlyShadow shadow(addr, length);
-  return std::accumulate(shadow.begin_non_null(), shadow.end_non_null(),
-                         static_cast<SymExpr>(nullptr),
-                         [&](SymExpr result, SymExpr byteExpr) {
-                           if (result == nullptr)
-                             return byteExpr;
+  ReadOnlyShadow shadow(addr, length);  // 创建只读影子内存视图
+  // 遍历影子内存，对读取到的内存进行读取并合并
+  return std::accumulate(shadow.begin_non_null(), shadow.end_non_null(),  // 起始位置和结束位置
+                         static_cast<SymExpr>(nullptr),             // 累加的初值
+                         [&](SymExpr result, SymExpr byteExpr) {    // 遍历时的合并操作
+                           if (result == nullptr) // 若当前结果为空（也就是刚开始）
+                             return byteExpr; // 直接返回当前获取到的表达式（result=byteExpr）
 
-                           return little_endian
+                           return little_endian   // 否则，按照大小端进行合并拼接
                                       ? _sym_concat_helper(byteExpr, result)
                                       : _sym_concat_helper(result, byteExpr);
                          });
 }
 
+// 写内存区（区分大小端）
 void _sym_write_memory(uint8_t *addr, size_t length, SymExpr expr,
                        bool little_endian) {
   assert(length && "Invalid query for zero-length memory region");
@@ -117,15 +129,16 @@ void _sym_write_memory(uint8_t *addr, size_t length, SymExpr expr,
 #endif
 
   if (expr == nullptr && isConcrete(addr, length))
-    return;
+    return; // 若表达式为空或对应的内存区域中均有具体值，则不需继续
 
+  // 创建可读写影子内存视图进行写入操作
   ReadWriteShadow shadow(addr, length);
   if (expr == nullptr) {
     std::fill(shadow.begin(), shadow.end(), nullptr);
   } else {
     size_t i = 0;
-    for (SymExpr &byteShadow : shadow) {
-      byteShadow = little_endian
+    for (SymExpr &byteShadow : shadow) {  // 遍历目标影子内存区
+      byteShadow = little_endian  // 根据大小端不同，进行写入
                        ? _sym_extract_helper(expr, 8 * (i + 1) - 1, 8 * i)
                        : _sym_extract_helper(expr, (length - i) * 8 - 1,
                                              (length - i - 1) * 8);
@@ -134,13 +147,15 @@ void _sym_write_memory(uint8_t *addr, size_t length, SymExpr expr,
   }
 }
 
+//
 SymExpr _sym_build_extract(SymExpr expr, uint64_t offset, uint64_t length,
                            bool little_endian) {
-  size_t totalBits = _sym_bits_helper(expr);
+  size_t totalBits = _sym_bits_helper(expr);  // 获取位数
   assert((totalBits % 8 == 0) && "Aggregate type contains partial bytes");
+  // 若不符合整除8，则表达式不完整（因为为字节序列）
 
   SymExpr result;
-  if (little_endian) {
+  if (little_endian) {  // 若为小端法
     result = _sym_extract_helper(expr, totalBits - offset * 8 - 1,
                                  totalBits - offset * 8 - 8);
     for (size_t i = 1; i < length; i++) {

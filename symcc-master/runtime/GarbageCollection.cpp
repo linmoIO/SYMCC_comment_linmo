@@ -1,16 +1,4 @@
-// This file is part of SymCC.
-//
-// SymCC is free software: you can redistribute it and/or modify it under the
-// terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or (at your option) any later
-// version.
-//
-// SymCC is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-// A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License along with
-// SymCC. If not, see <https://www.gnu.org/licenses/>.
+// 主要做从域中获取符号表达式以及将符号表达式加入到域中的操作
 
 #include "GarbageCollection.h"
 
@@ -44,7 +32,7 @@ std::set<SymExpr> collectReachableExpressions() {
     collectReachableExpressions(r);
   }
 
-  for (const auto &mapping : g_shadow_pages) {  // 根据映射遍历阴影区，获取表达式
+  for (const auto &mapping : g_shadow_pages) {  // 根据映射遍历影子内存，获取表达式
     collectReachableExpressions({mapping.second, kPageSize});
   }
 

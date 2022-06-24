@@ -1,3 +1,4 @@
+// 主要做函数库封装操作
 // This file is part of SymCC.
 //
 // SymCC is free software: you can redistribute it and/or modify it under the
@@ -19,7 +20,7 @@
 ///
 /// The configuration needs to be loaded so that we can apply settings related
 /// to symbolic input.
-// 初始化libc封装
+// 初始化libc函数库封装
 void initLibcWrappers();
 
 #endif
